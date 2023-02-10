@@ -9,6 +9,41 @@ import numpy as np
 import math  as mt
 from numpy import zeros,sin,cos,empty,sqrt;
 
+
+#>>--<<..>>--<<..>>--<<..>>--<<..>>--<<..>>--<<..>>--<<..>>
+#  Tait-Bryan Angles:
+#>>--<<..>>--<<..>>--<<..>>--<<..>>--<<..>>--<<..>>--<<..>>
+class CTAITBRYAN:
+
+    def __init__(self, *I):
+        if len(I) == 1:
+            I = I[0]
+
+        self.phi = I[0]
+        self.tta = I[1]
+        self.psi = I[2]
+
+    def __iter__(self):
+        yield self.phi
+        yield self.tta
+        yield self.psi
+
+    def __call__(self):
+        return (self.phi, self.tta, self.psi)
+
+    def to_deg(self):
+        rad2deg = 180./mt.pi
+        return (self.phi * rad2deg, self.tta * rad2deg, self.psi * rad2deg)
+
+    def __getitem__(self, i):
+        return (self.phi, self.tta, self.psi)[i]
+
+    def __repr__(self):
+        return "tbra( {:1.01e}, {:1.01e}, {:1.01e} )".format(self.phi, self.tta, self.psi)
+
+#>>--<<..>>--<<..>>--<<..>>--<<..>>--<<..>>--<<..>>--<<..>>
+#  Quaternions:
+#>>--<<..>>--<<..>>--<<..>>--<<..>>--<<..>>--<<..>>--<<..>>
 class CQUATERNIONS:
 
     def __init__(self, I):
@@ -20,24 +55,25 @@ class CQUATERNIONS:
                 print("shape     = {:s}".format(str(I.shape)))
 
 
-        if isinstance(I, list) or isinstance(I, tuple):
-            if len(I) == 4:
-                self.q = list(I)
-
-            elif len(I) == 3:
-                self.q = self._euler2Q(I)
-
-            else:
-                print("error #1");
-
-        elif isinstance(I, np.ndarray):
+        if isinstance(I, np.ndarray):
             if I.shape == (3,3):
                 self.q = self._from_C(I)
             elif I.shape == (4,):
                 self.q = list(I)
             else:
-                print("error #2 (shape = {:s})".format(str(I.shape)))
+                print("error #1 (shape = {:s})".format(str(I.shape)))
                 print(I)
+
+        elif hasattr(I, "__iter__"):
+            if isinstance(I, CTAITBRYAN) or len(I) == 3:
+                self.q = self._tbra2Q(I)
+
+            elif len(I) == 4:
+                self.q = list(I)
+
+            else:
+                print("error #2");
+
 
         else:
             print("error #3")
@@ -50,16 +86,17 @@ class CQUATERNIONS:
         for i in self.q:
             yield i
 
-    def _euler2Q(self, euler):
+    def _tbra2Q(self, tbra):
         """
-        Navigation -- from euler to Q.
+        Navigation -- from tait-bryan to Q.
 
-        : euler     : [phi, tta, psi] [rad]
+        : tbra      : [phi, tta, psi] [rad]
         : output    : CQUATERNIONS
         """
-        half_phi   = 0.5*euler[0]
-        half_theta = 0.5*euler[1]
-        half_psi   = 0.5*euler[2]
+
+        half_phi   = 0.5*tbra[0]
+        half_theta = 0.5*tbra[1]
+        half_psi   = 0.5*tbra[2]
 
         return [
             (cos(half_phi)*cos(half_theta)*cos(half_psi)) + (sin(half_phi)*sin(half_theta)*sin(half_psi)),
@@ -68,9 +105,9 @@ class CQUATERNIONS:
             (cos(half_phi)*cos(half_theta)*sin(half_psi)) - (sin(half_phi)*sin(half_theta)*cos(half_psi))
         ];
 
-    def to_euler(self):
+    def to_tbra(self):
         """
-        Navigation -- from Q to euler.
+        Navigation -- from Q to tait-bryian angles.
 
         : output   : phi   [rad]
         : output   : theta [rad]
@@ -87,7 +124,7 @@ class CQUATERNIONS:
             print("ERRO: norm(Q) = {:f}".format(np.sqrt(np.sum(q**2))))
             theta = 0;
 
-        return (phi, theta, psi)
+        return CTAITBRYAN(phi, theta, psi)
 
     def to_C(self):
         """
@@ -121,7 +158,7 @@ class CQUATERNIONS:
         """
 
         # <<------------------------------>>
-        # << calculates C to euler:       >>
+        # << calculates C to tait-bryan:  >>
         # <<------------------------------>>
         assert(C[2,2] != 0)
         assert(C[0,0] != 0)
@@ -132,9 +169,9 @@ class CQUATERNIONS:
         psi   = np.arctan2(C[0,1], C[0,0])
 
         # <<------------------------------>>
-        # << calculates euler to Q:       >>
+        # << calculates tait-bryan to Q:  >>
         # <<------------------------------>>
-        return self._euler2Q([phi, theta, psi])
+        return self._tbra2Q(CTAITBRYAN(phi, theta, psi))
 
 
     def __mul__(self, I):
@@ -205,15 +242,15 @@ if __name__ == "__main__":
     q = CQUATERNIONS([ 0.2, 0.3, 0.4, 0.5 ])
     print(q)
 
-    print("init() with euler")
+    print("init() with tait-bryan")
     q = CQUATERNIONS([ 0,0,0 ])
     print(q)
 
-    print("tests with 'to_euler()'")
+    print("tests with 'to_tbra()'")
     rad2deg = 180./3.14159265359
-    print( [i*rad2deg for i in CQUATERNIONS([ 10./rad2deg, 0, 0 ]).to_euler()] )
-    print( [i*rad2deg for i in CQUATERNIONS([ 0, 10./rad2deg, 0 ]).to_euler()] )
-    print( [i*rad2deg for i in CQUATERNIONS([ 0, 0, 10./rad2deg ]).to_euler()] )
+    print( CQUATERNIONS([ 10./rad2deg, 0, 0 ]).to_tbra().to_deg() )
+    print( CQUATERNIONS([ 0, 10./rad2deg, 0 ]).to_tbra().to_deg() )
+    print( CQUATERNIONS([ 0, 0, 10./rad2deg ]).to_tbra().to_deg() )
 
     print("tests with to_C()")
     print(CQUATERNIONS([0,0,0]).to_C())
@@ -228,12 +265,12 @@ if __name__ == "__main__":
     print("psi = -45[deg], C(q) x vector = {:s}".format((CQUATERNIONS([0,0,-45/rad2deg])*vector).__str__()))
 
     print("from C to Q")
-    euler = [20, 30, 40]
-    print("from euler = {:s}".format(euler.__str__()))
-    euler = [i/rad2deg for i in euler]
-    C     = CQUATERNIONS(euler).to_C()
+    tbra = CTAITBRYAN([20, 30, 40])
+    print("from tbra = {:s}".format(str(tbra)))
+    tbra = CTAITBRYAN( [i/rad2deg for i in tbra] )
+    C     = CQUATERNIONS(tbra).to_C()
     Q     = CQUATERNIONS(C)
-    print("result = {:s}".format( [i*rad2deg for i in Q.to_euler()].__str__() ))
+    print("result = {:s}".format( [i*rad2deg for i in Q.to_tbra()].__str__() ))
 
     print("q1 x q2")
     print(CQUATERNIONS([0,0,0]))
@@ -286,12 +323,12 @@ if __name__ == "__main__":
     for t in [1,5,20,90]:
         # after t seconds, the quaternions should be:
         y = odeint(eqdiff, list(qI2b), [0,t], (w,))[1,:]
-        # with these euler angles:
-        euler = CQUATERNIONS(y).to_euler()
+        # with these tait-bryan angles:
+        tbra = CQUATERNIONS(y).to_tbra()
 
         # and described at b:
         F_b = (CQUATERNIONS(y) * F).squeeze()
-        print("F_b(phi = {:1.03f}) = [{:1.03f} {:1.03f} {:1.03f}]".format(rad2deg*euler[0], F_b[0], F_b[1], F_b[2]))
+        print("F_b(phi = {:1.03f}) = [{:1.03f} {:1.03f} {:1.03f}]".format(rad2deg*tbra[0], F_b[0], F_b[1], F_b[2]))
 
     #----------------------#
     # transformation tests:
@@ -305,8 +342,8 @@ if __name__ == "__main__":
     q_a2c = CQUATERNIONS(np.dot(Rb2c, Ra2b))
     print("q_a2c = {:s}".format(str(q_a2c)))
     print("      = {:s}".format(str(q_b2c * q_a2b)))
-    print("euler(q_a2c) =")
-    print(q_a2c.to_euler())
-    print((q_b2c * q_a2b).to_euler())
+    print("tbra(q_a2c) =")
+    print(q_a2c.to_tbra())
+    print((q_b2c * q_a2b).to_tbra())
 
 #####################################################
